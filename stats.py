@@ -8,6 +8,8 @@ from .constants import *
 from .pytilities.validation import *
 from .pytilities.returns import *
 
+
+
 def median_index(data_list: Sequence):
     ''' Returns the index or indices of the median value(s) in a sorted version of the input list.
 
@@ -44,6 +46,7 @@ def median_index(data_list: Sequence):
         lower_index = len(data_list) // 2 - 1
         higher_index = len(data_list) // 2
         return (lower_index, higher_index)
+
 
 def interquartile_slice(data_list: Sequence):
     ''' Returns the data points within the interquartile range (IQR) of the input list using 
@@ -86,9 +89,48 @@ def interquartile_slice(data_list: Sequence):
 
     return original_sequence_type(input_type, result)
 
+
 def iqs(data_list: Sequence):
     """Alias for `interquartile_slice`. Returns the data points within the IQR of the input list."""
     return interquartile_slice(data_list)
+
+
+def nck(n_trials: int, k_success: int):
+    """ Compute the binomial coefficient C(n_trials, k_success).
+
+    This function returns the number of ways to choose k_success outcomes from
+    n_trials total outcomes without regard to order.
+
+    Parameters
+    ----------
+    n_trials : int
+        The total number of trials/items (n).
+    k_success : int
+        The number of selected successes/items (k).
+
+    Returns
+    -------
+    Fraction
+        The exact binomial coefficient value as a Fraction.
+
+    Raises
+    ------
+    TypeError, ValueError
+        If inputs are not integers or if k_success is greater than n_trials.
+    """
+    validate_as(n_trials, int)
+    validate_as(k_success, int)
+    validate_is_greater_or_equal_to(n_trials, k_success)
+    
+    return Fraction(Math.factorial(n_trials), Math.factorial(k_success) * Math.factorial(n_trials - k_success))
+
+
+def validate_probability(p: Union[Fraction, int, float]):
+    validate_as(p, (Fraction, int, float))
+    if isinstance (p, float): validate_float(p)
+    validate_is_greater_than(p, 0)
+    validate_is_less_than(p, 1)
+
 
 def binom(p: Union[Fraction, int, float], n_trials: int = 1, k_success: int = 1):
     """Calculate binomial distribution statistics for a given probability of success.
@@ -120,13 +162,10 @@ def binom(p: Union[Fraction, int, float], n_trials: int = 1, k_success: int = 1)
     TypeError, ValueError
         If input parameters are invalid or out of range.
     """
-    validate_as(p, (Fraction, int, float))
-    if isinstance (p, float): validate_float(p)
-    validate_is_greater_than(p, 0)
-    validate_is_less_than(p,1)
+    validate_probability(p)
+
     validate_is_greater_or_equal_to(n_trials, k_success)
     validate_against(n_trials, (0,))
-    validate_against(p, (0, 1))
 
     p = Fraction(p)
     q = Fraction(p.denominator - p.numerator, p.denominator)
@@ -145,86 +184,113 @@ def binom(p: Union[Fraction, int, float], n_trials: int = 1, k_success: int = 1)
         }
     }
 
-def nck(n_trials: int, k_success: int):
-    """ Compute the binomial coefficient C(n_trials, k_success).
-
-    This function returns the number of ways to choose k_success outcomes from
-    n_trials total outcomes without regard to order.
-
-    Parameters
-    ----------
-    n_trials : int
-        The total number of trials/items (n).
-    k_success : int
-        The number of selected successes/items (k).
-
-    Returns
-    -------
-    Fraction
-        The exact binomial coefficient value as a Fraction.
-
-    Raises
-    ------
-    TypeError, ValueError
-        If inputs are not integers or if k_success is greater than n_trials.
-    """
-    validate_as(n_trials, int)
-    validate_as(k_success, int)
-    validate_is_greater_or_equal_to(n_trials, k_success)
-    
-    return Fraction(Math.factorial(n_trials), Math.factorial(k_success) * Math.factorial(n_trials - k_success))
+def fractional_complement(p):
+    validate_probability(p)
+    p = Fraction(p)
+    return Fraction(p.denominator - p.numerator, p.denominator)
 
 def geom(p: Union[Fraction, int, float], k_trials: int = 1, includes_success: bool = True):
-    """ Calculate geometric distribution statistics for a given probability of success.
+    """ Compute geometric PMF value for a given probability of success.
 
-    Computes the probability, mean, and standard deviation for the geometric distribution
-    with probability of success `p` and number of trials `k_trials`. The function supports
-    both definitions: counting the trial on which the first success occurs (`includes_success=True`)
-    or the number of failures before the first success (`includes_success=False`).
+    Returns the probability of the first success at a specific trial count for a geometric
+    random variable with success probability `p`.
+
+    - If `includes_success` is True, `k_trials` is the trial index of the first success and
+      the function computes $P(X = k) = p(1-p)^{k-1}$.
+    - If `includes_success` is False, `k_trials` is the number of failures before the first
+      success and the function computes $P(Y = k) = p(1-p)^k$.
 
     Parameters
     ----------
     p : Fraction | int | float
         Probability of success on a single trial (0 < p < 1).
     k_trials : int, optional
-        The trial number (if includes_success=True) or number of failures (if includes_success=False).
-        Defaults to 1 (first trial).
+        The trial number (if includes_success=True) or number of failures
+        (if includes_success=False). Defaults to 1.
     includes_success : bool, optional
-        If True, k_trials counts the trial of first success (default). If False, counts failures before success.
+        If True, `k_trials` counts the trial of first success (default). If False,
+        `k_trials` counts failures before success.
 
     Returns
     -------
-    dict
-        Dictionary with keys VALUE, MEAN, and SDEV:
-        - VALUE: Probability of first success at k_trials as a Fraction.
-        - MEAN: Expected value as a Fraction.
-        - SDEV: Standard deviation as both a symbolic string (FRAC) and a float (FLOAT).
+    Fraction
+        Probability value for the geometric distribution at `k_trials`.
 
     Raises
     ------
     TypeError, ValueError
-        If input parameters are invalid or out of range.
+        If `p` is invalid or out of range.
     """
-    validate_as(p, (Fraction, int, float))
-    if isinstance (p, float): validate_float(p)
-    validate_is_greater_than(p, 0)
-    validate_is_less_than(p, 1)
-    validate_against(p, (0, 1))
+    validate_probability(p)
 
     p = Fraction(p)
-    q = Fraction(p.denominator - p.numerator, p.denominator)
-    value = p * pow(q,k_trials - 1) if includes_success else p * pow(q, k_trials)
-    mean = Fraction(p.denominator, p.numerator) if includes_success else Fraction(1-p, p)
-    variance = Fraction(q, p**2) 
+    q = fractional_complement(p)
+    return p * pow(q,k_trials - 1) if includes_success else p * pow(q, k_trials)
 
-    return {
-        VALUE: value,
-        MEAN: mean,
-        STD_DEV: {
-            FRAC_STR: f'math.sqrt(Fraction({variance}))',
-            FLOAT: float(Math.sqrt(variance))
-        }
-    }
+
+def geom_mean(p: Union[Fraction, int, float], includes_success: bool = True):
+    """ Compute the mean of a geometric distribution.
+
+    Uses one of two parameterizations based on `includes_success`:
+
+    - If True, returns $E[X] = \frac{1}{p}$ where $X$ is the trial of first success.
+    - If False, returns $E[Y] = \frac{1-p}{p}$ where $Y$ is failures before first success.
+
+    Parameters
+    ----------
+    p : Fraction | int | float
+        Probability of success on a single trial (0 < p < 1).
+
+    includes_success : bool, optional
+        Selects whether the geometric variable counts the first-success trial (True)
+        or failures before success (False). Defaults to True.
+
+    Returns
+    -------
+    Fraction
+        Expected value of the geometric random variable under the selected definition.
+
+    Raises
+    ------
+    TypeError, ValueError
+        If `p` is invalid or out of range.
+    """
+    validate_probability(p)
+
+    p = Fraction(p)
+    q = fractional_complement(p)
+    
+    return Fraction(p.denominator, p.numerator) if includes_success else Fraction(1-p, p)
+
+
+def geom_var(p: Union[Fraction, int, float]):
+    """ Compute the variance of a geometric distribution.
+
+    Returns $Var = \frac{1-p}{p^2}$, which is the same for both common geometric
+    parameterizations (trial-of-success and failures-before-success).
+
+    Parameters
+    ----------
+    p : Fraction | int | float
+        Probability of success on a single trial (0 < p < 1).
+
+    Returns
+    -------
+    Fraction
+        Variance of the geometric random variable.
+
+    Raises
+    ------
+    TypeError, ValueError
+        If `p` is invalid or out of range.
+    """
+    validate_probability(p)
+
+    p = Fraction(p)
+    q = fractional_complement(p)
+    
+    return Fraction(q, p**2)
+
 
 def geoh(pop_i: int, pop_b: int, n_trials:int, k_success: int) -> Fraction:
     """ Compute hypergeometric probability for a target number of successes.
@@ -260,7 +326,8 @@ def geoh(pop_i: int, pop_b: int, n_trials:int, k_success: int) -> Fraction:
     validate_is_greater_than(pop_i, 0)
     validate_is_greater_than(pop_b, 0)
     validate_is_greater_than(n_trials, 0)
-    validate_is_greater_than(k_success, 0)
+    validate_is_greater_or_equal_to(k_success, 0)
+    validate_is_greater_or_equal_to(n_trials, k_success)
 
     r = nck(pop_i, k_success)
     bnk = nck(pop_b, n_trials - k_success)

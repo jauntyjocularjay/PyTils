@@ -3,9 +3,7 @@ from fractions import Fraction
 from .constants import *
 from .pytilities.pytest_helpers import (
     assert_approx_equal,
-    assert_mapping_has_keys,
     assert_raises_expected,
-    assert_starts_with,
 )
 from .pytilities.validation import (
     InvalidSequenceError,
@@ -16,7 +14,18 @@ from .pytilities.validation import (
     ValueBelowBoundsError,
     sequence_are_numbers,
 )
-from .stats import binom, geom, geoh, interquartile_slice, iqs, median_index, nck, pois
+from .stats import (
+    binom,
+    geom,
+    geom_mean,
+    geom_var,
+    geoh,
+    interquartile_slice,
+    iqs,
+    median_index,
+    nck,
+    pois,
+)
 from .boxplot import BoxPlot
 
 
@@ -226,25 +235,31 @@ def test_binom_zero_trials_prohibited():
 ])
 def test_geom_typical(p, k, expected_value):
     '''Test geom returns correct probability for typical cases (includes_success=True).'''
-    result = geom(p, k, includes_success=True)
-    actual = float(result[VALUE])
+    # geom now returns the probability value directly.
+    actual = float(geom(p, k, includes_success=True))
     assert_approx_equal(
         actual,
         expected_value,
         f'geom({p}, {k}) should return probability {expected_value}',
         abs_tol=1e-6,
     )
-    std_dev_payload = result[STD_DEV]
-    assert_mapping_has_keys(
-        std_dev_payload,
-        (FRAC_STR, FLOAT),
-        f'geom({p}, {k}) std-dev payload should include required keys',
-    )
-    assert isinstance(std_dev_payload[FRAC_STR], str), f'geom({p}, {k}) should return STD_DEV[{FRAC_STR!r}] as a string, got {type(std_dev_payload[FRAC_STR]).__name__}'
-    assert_starts_with(
-        std_dev_payload[FRAC_STR],
-        'math.sqrt(Fraction(',
-        f'geom({p}, {k}) should output python-syntax sqrt Fraction string',
+
+
+@pytest.mark.parametrize('p, k, expected_value', [
+    (0.5, 0, 0.5),
+    (0.5, 1, 0.25),
+    (0.2, 2, 0.128),
+    (0.7, 0, 0.7),
+])
+def test_geom_without_including_success(p, k, expected_value):
+    '''Test geom returns direct probability for failures-before-first-success definition.'''
+    # When includes_success=False, k is interpreted as failures before first success.
+    actual = float(geom(p, k, includes_success=False))
+    assert_approx_equal(
+        actual,
+        expected_value,
+        f'geom({p}, {k}, includes_success=False) should return probability {expected_value}',
+        abs_tol=1e-6,
     )
 
 def test_geom_invalid_probability():
@@ -262,16 +277,39 @@ def test_geom_invalid_probability():
 
 def test_geom_zero_or_one_probability():
     '''Test geom raises strict-bound errors for p=0 or p=1.'''
+    # Probability at the lower bound is invalid for geometric distribution.
     assert_raises_expected(
         lambda: geom(0, 2),
         ValueBelowBoundsError,
         'geom should raise ValueBelowBoundsError for p=0',
     )
+    # Probability at the upper bound is also invalid for geometric distribution.
     assert_raises_expected(
         lambda: geom(1, 2),
         ValueAboveBoundsError,
         'geom should raise ValueAboveBoundsError for p=1',
     )
+
+
+@pytest.mark.parametrize('p, includes_success, expected', [
+    (0.25, True, Fraction(4, 1)),
+    (0.25, False, Fraction(3, 1)),
+    (0.5, True, Fraction(2, 1)),
+    (0.5, False, Fraction(1, 1)),
+])
+def test_geom_mean_typical(p, includes_success, expected):
+    '''Test geom_mean returns expected exact mean for both counting conventions.'''
+    # Mean should follow each convention exactly as a Fraction.
+    actual = geom_mean(p, includes_success=includes_success)
+    assert actual == expected, f'geom_mean({p}, includes_success={includes_success}) should return {expected}, got {actual}'
+
+
+def test_geom_var_typical():
+    '''Test geom_var returns expected exact variance value.'''
+    # Variance for p=0.25 should be (1-p)/p^2 = 12.
+    actual = geom_var(0.25)
+    expected = Fraction(12, 1)
+    assert actual == expected, f'geom_var(0.25) should return {expected}, got {actual}'
 
 
 # --- nck tests ---
@@ -311,19 +349,28 @@ def test_nck_k_greater_than_n_raises():
 # --- geoh tests ---
 def test_geoh_typical_probability():
     '''Test geoh returns expected hypergeometric probability for a standard case.'''
+    # Standard hypergeometric case should match the known closed-form value.
     actual = geoh(5, 5, 4, 2)
     expected = Fraction(10, 21)
     assert actual == expected, f'geoh(5, 5, 4, 2) should return {expected}, got {actual}'
 
 
+def test_geoh_allows_zero_successes():
+    '''Test geoh allows k_success=0 and returns the corresponding probability.'''
+    # Allowing zero successes should produce P(X=0) under the hypergeometric PMF.
+    actual = geoh(5, 5, 4, 0)
+    expected = Fraction(1, 42)
+    assert actual == expected, f'geoh(5, 5, 4, 0) should return {expected}, got {actual}'
+
+
 @pytest.mark.parametrize('pop_i,pop_b,n_trials,k_success,expected_error', [
     (5, 5, 2, 3, ValueBelowBoundsError),
-    (5, 5, 4, 0, ValueBelowBoundsError),
     (0, 5, 4, 1, ValueBelowBoundsError),
     (5, 0, 4, 1, ValueBelowBoundsError),
 ])
 def test_geoh_invalid_bounds(pop_i, pop_b, n_trials, k_success, expected_error):
     '''Test geoh raises bounds errors for invalid populations/trials/success values.'''
+    # Inputs that violate declared bounds should be rejected by validators.
     assert_raises_expected(
         lambda: geoh(pop_i, pop_b, n_trials, k_success),
         expected_error,
@@ -331,6 +378,16 @@ def test_geoh_invalid_bounds(pop_i, pop_b, n_trials, k_success, expected_error):
             'geoh should raise a bounds error for invalid inputs '
             f'({pop_i}, {pop_b}, {n_trials}, {k_success})'
         ),
+    )
+
+
+def test_geoh_n_trials_below_k_success_raises():
+    '''Test geoh rejects impossible cases where k_success exceeds n_trials.'''
+    # Having more successes than trials is impossible and must raise.
+    assert_raises_expected(
+        lambda: geoh(5, 5, 3, 4),
+        ValueBelowBoundsError,
+        'geoh should raise ValueBelowBoundsError when n_trials is below k_success',
     )
 
 

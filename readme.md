@@ -12,6 +12,8 @@ A collection of python utilities I created because why in Hades are these not al
   - [`binom`](#binom)
   - [`nck`](#nck)
   - [`geom`](#geom)
+  - [`geom_mean`](#geom_mean)
+  - [`geom_var`](#geom_var)
   - [`geoh`](#geoh)
   - [`pois`](#pois)
   - [Constants](#constants)
@@ -73,15 +75,34 @@ nck(10, 3)  # Fraction(120, 1)
 
 ### `geom`
 
-Computes geometric distribution statistics: probability of first success at trial `k`, mean, and standard deviation. Supports both definitions — counting the trial of first success (`includes_success=True`, default) or counting failures before first success (`includes_success=False`).
+Computes the geometric PMF value at `k_trials` for a success probability `p`.
+Supports both definitions of the geometric variable:
+
+- `includes_success=True` (default): `k_trials` is the trial index of the first success.
+- `includes_success=False`: `k_trials` is the number of failures before the first success.
 
 ```python
 from quantkit.stats import geom
-result = geom(p=Fraction(1, 6), k_trials=3)
-result[VALUE]       # probability as a Fraction
-result[MEAN]        # expected trials as a Fraction
-result[STD_DEV][FRAC_STR] # standard deviation as a symbolic string
-result[STD_DEV][FLOAT]    # standard deviation as a float
+geom(p=Fraction(1, 6), k_trials=3)  # Fraction PMF value
+```
+
+### `geom_mean`
+
+Computes the mean of the geometric distribution for the selected definition.
+
+```python
+from quantkit.stats import geom_mean
+geom_mean(Fraction(1, 6), includes_success=True)   # 1/p
+geom_mean(Fraction(1, 6), includes_success=False)  # (1-p)/p
+```
+
+### `geom_var`
+
+Computes the variance of the geometric distribution, `Var = (1-p)/p^2`.
+
+```python
+from quantkit.stats import geom_var
+geom_var(Fraction(1, 6))
 ```
 
 ### `geoh`
